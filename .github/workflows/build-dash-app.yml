@@ -22,17 +22,18 @@ jobs:
         java-version: '17'
         cache: 'gradle'
 
-    - name: Setup Android SDK & NDK
+    # Sets up the Android SDK tools framework
+    - name: Setup Android SDK
       uses: android-actions/setup-android@v4
       with:
         log-accepted-android-sdk-licenses: true
 
-    # Dash relies on C++ for its All-Intra engine. This ensures the NDK toolchain is ready.
-    - name: Install Android NDK Components
+    # Dash relies on C++ for its All-Intra engine. This locks down the correct NDK toolchain version.
+    - name: Install Android NDK & CMake Components
       run: |
         sdkmanager --install "ndk;25.2.9519653" "cmake;3.22.1"
 
-    # Automates the creation of a recognizable vector launcher icon inside the build directories
+    # Automatically establishes a recognizable launcher icon workspace placeholder before compiling
     - name: Generate Dash App Launcher Icon Placeholder
       run: |
         mkdir -p android/app/src/main/res/mipmap-hdpi
@@ -49,7 +50,7 @@ jobs:
         </svg>
         EOF
         
-        # Simple SVG fallback script to ensure compilation passes safely even if graphics packages are missing
+        # Fallback distribution steps to make sure mipmaps pass packaging checks cleanly
         cp dash_icon.svg android/app/src/main/res/mipmap-hdpi/ic_launcher.svg
         cp dash_icon.svg android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.svg
         echo "🎨 Dash icon layout created inside resource mipmaps."
@@ -61,23 +62,23 @@ jobs:
     - name: Compile testing APK (Debug Application)
       run: |
         cd android && ./gradlew assembleDebug
-      continue-on-error: true
 
     - name: Compile production AAB (Android App Bundle)
       run: |
         cd android && ./gradlew bundleRelease
-      continue-on-error: true
 
+    # FIXED: Uses robust recursive glob search scanning to find exactly where Gradle placed the compiled APKs
     - name: Upload Compiled APK Artifact
       uses: actions/upload-artifact@v5
       with:
         name: Dash-Editor-Debug-APK
-        path: android/app/build/outputs/apk/debug/*.apk
-        if-no-files-found: warn
+        path: android/app/build/outputs/**/*.apk
+        if-no-files-found: error # Immediately flags the runner log if compilation failed to output an engine file
 
+    # FIXED: Uses robust recursive glob search scanning to capture the release AAB bundle wherever it rests
     - name: Upload Production AAB Bundle Artifact
       uses: actions/upload-artifact@v5
       with:
         name: Dash-Editor-Release-AAB
-        path: android/app/build/outputs/bundle/release/*.aab
-        if-no-files-found: warn
+        path: android/app/build/outputs/**/*.aab
+        if-no-files-found: error # Ensures transparency so you can tell if signing setups require parameter additions
