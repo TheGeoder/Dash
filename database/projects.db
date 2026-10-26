@@ -1,0 +1,86 @@
+-- ============================================================================
+-- 1. THE COLOR PAGE: NODE-BASED COLOR GRADING PIPELINE
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS color_nodes (
+    node_id TEXT PRIMARY KEY,
+    item_id TEXT NOT NULL,                -- Links to the specific timeline video clip
+    node_index INTEGER NOT NULL,          -- Execution order index
+    node_type TEXT DEFAULT 'SERIAL',      -- 'SERIAL', 'PARALLEL', 'LAYER', 'LUT'
+    is_bypassed INTEGER DEFAULT 0,        -- Quick toggle flag for preview A/B testing
+    -- Primary Wheel Adjustments (Stored as floating-point offsets)
+    lift_r REAL DEFAULT 0.0, lift_g REAL DEFAULT 0.0, lift_b REAL DEFAULT 0.0, lift_y REAL DEFAULT 0.0,
+    gamma_r REAL DEFAULT 0.0, gamma_g REAL DEFAULT 0.0, gamma_b REAL DEFAULT 0.0, gamma_y REAL DEFAULT 0.0,
+    gain_r REAL DEFAULT 0.0, gain_g REAL DEFAULT 0.0, gain_b REAL DEFAULT 0.0, gain_y REAL DEFAULT 0.0,
+    -- Saturation, Contrast, and Pivot sliders
+    saturation REAL DEFAULT 50.0,         -- 0.0 to 100.0
+    contrast REAL DEFAULT 1.0,            -- Multiplier
+    pivot REAL DEFAULT 0.5,
+    lut_file_path TEXT,                   -- Pointer to internal or custom user (.cube) LUT files
+    FOREIGN KEY(item_id) REFERENCES timeline_items(item_id) ON DELETE CASCADE
+);
+
+-- MAPS MANIFEST CONNECTIONS FOR THE NODE PATH FLOW
+CREATE TABLE IF NOT EXISTS color_node_links (
+    link_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    source_node_id TEXT NOT NULL,
+    target_node_id TEXT NOT NULL,
+    FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE,
+    FOREIGN KEY(source_node_id) REFERENCES color_nodes(node_id) ON DELETE CASCADE,
+    FOREIGN KEY(target_node_id) REFERENCES color_nodes(node_id) ON DELETE CASCADE
+);
+
+-- ============================================================================
+-- 2. THE FUSION PAGE: VFX KEYFRAMING & RESOLVE FX LAYERS
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS vfx_effects (
+    effect_id TEXT PRIMARY KEY,
+    item_id TEXT NOT NULL,
+    effect_type TEXT NOT NULL,            -- 'TRANSFORM', 'BLUR', 'CHROMA_KEY', 'SPEED_RAMP'
+    is_active INTEGER DEFAULT 1,
+    FOREIGN KEY(item_id) REFERENCES timeline_items(item_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS vfx_keyframes (
+    keyframe_id TEXT PRIMARY KEY,
+    effect_id TEXT NOT NULL,
+    target_parameter TEXT NOT NULL,       -- 'position_x', 'scale_factor', 'blur_radius', 'speed_curve'
+    frame_offset INTEGER NOT NULL,        -- Relative frame within the clip duration boundary
+    parameter_value REAL NOT NULL,        -- Numeric value state at this specific frame coordinate
+    interpolation_type TEXT DEFAULT 'LINEAR', -- 'LINEAR', 'BEZIER', 'HOLD'
+    FOREIGN KEY(effect_id) REFERENCES vfx_effects(effect_id) ON DELETE CASCADE
+);
+
+-- ============================================================================
+-- 3. THE FAIRLIGHT PAGE: PROFESSIONAL AUDIO BUS ROUTING & TRACK EQ
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS fairlight_track_mixers (
+    track_id TEXT PRIMARY KEY,            -- Maps 1:1 to audio timeline_tracks
+    fader_gain_db REAL DEFAULT 0.0,       -- Master volume slider position
+    pan_position REAL DEFAULT 0.0,        -- -1.0 (Hard Left) to +1.0 (Hard Right)
+    eq_low_gain REAL DEFAULT 0.0,         -- Simple 3-band parametric equalizer bands
+    eq_mid_gain REAL DEFAULT 0.0,
+    eq_high_gain REAL DEFAULT 0.0,
+    target_audio_bus TEXT DEFAULT 'BUS1', -- 'BUS1' (Master), 'BUS2' (Aux), etc.
+    FOREIGN KEY(track_id) REFERENCES timeline_tracks(track_id) ON DELETE CASCADE
+);
+
+-- ============================================================================
+-- 4. DA VINCI NEURAL ENGINE: AI METADATA & AUTOMATION CACHES
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS ai_voice_isolation (
+    item_id TEXT PRIMARY KEY,             -- Maps 1:1 to audio clips
+    isolation_strength REAL DEFAULT 0.0,  -- 0.0 (Off) to 100.0 (Max Background Noise Removal)
+    is_enabled INTEGER DEFAULT 0,
+    FOREIGN KEY(item_id) REFERENCES timeline_items(item_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ai_speech_transcripts (
+    transcript_id TEXT PRIMARY KEY,
+    asset_id TEXT NOT NULL,                -- Links to master source audio/video asset
+    word_index INTEGER NOT NULL,          -- Text position layout alignment
+    word_text TEXT NOT NULL,              -- Tokenized word string
+    start_time_seconds REAL NOT NULL,     -- High-precision text-to-video tracking sync
+    end_time_seconds REAL NOT NULL,
+    FOREIGN KEY(asset_id) REFERENCES project_assets(asset_id) ON DELETE CASCADE
+);
