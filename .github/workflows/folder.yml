@@ -1,0 +1,53 @@
+name: Auto-Generate Dash Engine Folders
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch: # Allows you to trigger this manually from the GitHub Actions tab
+
+jobs:
+  build-structure:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Crucial: Gives the runner permission to commit files back to your repo
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Create Dash Folder Tree and Gitkeeps
+      run: |
+        # Define the structural folders needed for the Dash framework
+        folders=(
+          "assets/fonts"
+          "assets/templates"
+          "cache/audio_pcm"
+          "cache/proxies"
+          "database"
+          "user_media"
+        )
+
+        for folder in "${folders[@]}"; do
+          if [ ! -d "$folder" ]; then
+            echo "📁 Creating directory: $folder"
+            mkdir -p "$folder"
+          fi
+          
+          # Always ensure a .gitkeep exists inside the directory
+          echo "# Tracked by GitHub Actions for Dash Editor" > "$folder/.gitkeep"
+        done
+
+    - name: Commit and Push Missing Folders
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@://github.com"
+        
+        git add assets/ cache/ database/ user_media/
+        
+        # Only commit if changes were actually made to avoid failing the build
+        if git diff --staged --quiet; then
+          echo "✅ All core engine folders already exist. Nothing to commit."
+        else
+          git commit -m "chore: auto-generate missing architecture directories and .gitkeeps"
+          git push
+        fi
